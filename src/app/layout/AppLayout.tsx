@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, LogOut, Users } from 'lucide-react'
+import { Bell, CalendarDays, ClipboardList, LogOut, MessageCircle, Users } from 'lucide-react'
 import { useAuth } from '../../features/auth/AuthContext'
 import { formatRoles } from '../../shared/roleLabels'
 
@@ -21,11 +21,25 @@ export function AppLayout() {
             <CalendarDays size={18} strokeWidth={2} aria-hidden />
             Disponibilidad
           </NavLink>
+          <NavLink to="/reservations" className={({ isActive }) => (isActive ? 'active' : '')}>
+            <ClipboardList size={18} strokeWidth={2} aria-hidden />
+            Reservas
+          </NavLink>
+          <NavLink to="/contact" className={({ isActive }) => (isActive ? 'active' : '')}>
+            <MessageCircle size={18} strokeWidth={2} aria-hidden />
+            Contacto
+          </NavLink>
           {isAdministrator && (
-            <NavLink to="/users" className={({ isActive }) => (isActive ? 'active' : '')}>
-              <Users size={18} strokeWidth={2} aria-hidden />
-              Usuarios
-            </NavLink>
+            <>
+              <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'active' : '')}>
+                <Bell size={18} strokeWidth={2} aria-hidden />
+                Notificaciones
+              </NavLink>
+              <NavLink to="/users" className={({ isActive }) => (isActive ? 'active' : '')}>
+                <Users size={18} strokeWidth={2} aria-hidden />
+                Usuarios
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="sidebar-foot">

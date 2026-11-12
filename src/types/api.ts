@@ -135,13 +135,13 @@ export interface ReservationDto {
 }
 
 export type NotificationType =
-  | 'RESERVATION_CONFIRMED'
-  | 'RESERVATION_CANCELLED'
-  | 'CONTACT_RECEIVED'
-  | 'GENERIC'
+  | 'RESERVATION_CONFIRMATION'
+  | 'REMINDER'
+  | 'CANCELLATION'
+  | 'CONTACT'
 
 export type NotificationChannel = 'EMAIL'
-export type NotificationStatus = 'PENDING' | 'SENT' | 'FAILED'
+export type NotificationStatus = 'PENDING' | 'SENT' | 'ERROR'
 
 export interface NotificationDto {
   id: string
@@ -152,6 +152,27 @@ export interface NotificationDto {
   payload?: Record<string, unknown>
   sentAt?: string
   errorMessage?: string
+}
+
+export interface NotificationRequestDto {
+  userId: string
+  type: NotificationType
+  payload?: Record<string, unknown>
+}
+
+export interface EmailTemplateDto {
+  id: string
+  code: string
+  subject: string
+  htmlBody: string
+  active: boolean
+}
+
+export interface EmailTemplateRequestDto {
+  code: string
+  subject: string
+  htmlBody: string
+  active?: boolean
 }
 
 export interface ContactInquiryCreateDto {
