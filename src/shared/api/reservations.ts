@@ -17,7 +17,10 @@ export async function listReservations(params?: {
 export async function searchReservations(params?: {
   studentId?: string
   professorId?: string
+  consultationTypeId?: string
   status?: ReservationStatus
+  dateFrom?: string
+  dateTo?: string
   page?: number
   size?: number
 }): Promise<PageResponseDto<ReservationDto>> {

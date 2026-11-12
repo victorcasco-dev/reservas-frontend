@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { parseApiError } from '../../shared/api/client'
 import { useAuth } from './AuthContext'
@@ -70,6 +70,9 @@ export function LoginPage() {
           <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
             {submitting ? 'Entrando…' : 'Iniciar sesión'}
           </button>
+          <p className="login-contact-link">
+            ¿Necesitás ayuda? <Link to="/contact">Contactá al equipo</Link>
+          </p>
         </form>
       </div>
     </div>
