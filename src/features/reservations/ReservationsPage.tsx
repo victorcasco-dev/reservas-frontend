@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { CircleX, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { isAxiosError } from 'axios'
 import type {
@@ -25,10 +25,11 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { Pagination } from '../../shared/ui/Pagination'
 import { SearchInput } from '../../shared/ui/SearchInput'
 import { useAuth } from '../auth/AuthContext'
+import { dateParts, filterControl as baseFilterControl } from '../../shared/format'
 
 const PAGE_SIZE = 10
 const STATUS_OPTIONS: Array<{ value: ReservationStatus | ''; label: string }> = [
-  { value: '', label: 'Todos los estados' },
+  { value: '', label: 'Todos' },
   { value: 'PENDING', label: 'Pendiente' },
   { value: 'CONFIRMED', label: 'Confirmada' },
   { value: 'CANCELLED', label: 'Cancelada' },
@@ -237,10 +238,17 @@ export function ReservationsPage() {
     }
   }
 
-  function applyFilters() {
+  const hasFilters = Boolean(query || statusFilter || dateFrom || dateTo)
+
+  function clearFilters() {
+    setQuery('')
+    setStatusFilter('')
+    setDateFrom('')
+    setDateTo('')
     setPage(0)
-    void loadReservations()
   }
+
+  const filterControl = baseFilterControl
 
   return (
     <div className="page">
@@ -259,8 +267,11 @@ export function ReservationsPage() {
       </header>
 
       <div className={`master-detail${canCreate ? '' : ' master-detail--single'}`}>
-        <section className="panel panel-list" aria-label="Listado de reservas">
-          <div className="panel-toolbar filters-toolbar reservation-filters flex-wrap">
+        <section
+          className="panel flex min-h-[420px] flex-col lg:h-[calc(100vh-11rem)]"
+          aria-label="Listado de reservas"
+        >
+          <div className="flex flex-col gap-2 border-b border-line bg-white/65 p-3">
             <SearchInput
               value={query}
               placeholder="Buscar por estudiante, profesor o tipo…"
@@ -270,39 +281,65 @@ export function ReservationsPage() {
                 setPage(0)
               }}
             />
-            <label className="field field-compact">
-              <span>Estado</span>
-              <select
-                value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value as ReservationStatus | '')
-                  setPage(0)
-                }}
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex min-w-0 flex-col gap-0.5 text-[0.7rem] font-medium text-muted">
+                Estado
+                <select
+                  className={`${filterControl} w-full`}
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value as ReservationStatus | '')
+                    setPage(0)
+                  }}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value || 'all'} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex min-w-0 flex-col gap-0.5 text-[0.7rem] font-medium text-muted">
+                Desde
+                <input
+                  type="date"
+                  className={`${filterControl} w-full`}
+                  value={dateFrom}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value)
+                    setPage(0)
+                  }}
+                />
+              </label>
+              <label className="flex min-w-0 flex-col gap-0.5 text-[0.7rem] font-medium text-muted">
+                Hasta
+                <input
+                  type="date"
+                  className={`${filterControl} w-full`}
+                  value={dateTo}
+                  onChange={(event) => {
+                    setDateTo(event.target.value)
+                    setPage(0)
+                  }}
+                />
+              </label>
+            </div>
+            {hasFilters && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 self-end rounded-md px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent-soft"
+                onClick={clearFilters}
               >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value || 'all'} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field field-compact">
-              <span>Desde</span>
-              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-            </label>
-            <label className="field field-compact">
-              <span>Hasta</span>
-              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-            </label>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={applyFilters}>
-              Filtrar
-            </button>
+                <X size={13} aria-hidden />
+                Limpiar filtros
+              </button>
+            )}
           </div>
 
-          <ul className="entity-list reservation-list">
+          <ul className="m-0 min-h-0 flex-1 list-none divide-y divide-line/70 overflow-y-auto p-0">
             {loading && <li className="entity-list-empty">Cargando reservas…</li>}
             {!loading && reservations.length === 0 && (
               <li className="entity-list-empty">No hay reservas que coincidan con los filtros.</li>
             )}
-            {reservations.map((reservation) => {
+            {!loading && reservations.map((reservation) => {
               const isOwner = isAdministrator
                 || (isStudent && reservation.studentId === user?.userId)
                 || (isProfessor && reservation.timeSlot.professorId === user?.userId)
@@ -316,60 +353,83 @@ export function ReservationsPage() {
                 reservation.timeSlot.professorName ??
                 professorNames.get(reservation.timeSlot.professorId) ??
                 'Profesor'
+              const date = dateParts(reservation.timeSlot.slotDate)
+              const inactive = ['CANCELLED', 'COMPLETED'].includes(reservation.status)
+              const isEditing = editing?.id === reservation.id
               return (
-                <li key={reservation.id} className="reservation-list-item">
-                  <article className="reservation-card">
-                    <div className="reservation-card-head">
-                      <div>
-                        <strong>{formatDate(reservation.timeSlot.slotDate)}</strong>
-                        <span className="entity-row-meta">
-                          {reservation.timeSlot.startTime.slice(0, 5)}–{reservation.timeSlot.endTime.slice(0, 5)}
-                        </span>
-                      </div>
-                      <span className={`badge badge-reservation-${reservation.status.toLowerCase()}`}>
+                <li
+                  key={reservation.id}
+                  className={`flex items-start gap-3 px-3 py-2.5 transition ${
+                    isEditing
+                      ? 'bg-accent-soft shadow-[inset_3px_0_0_var(--color-accent)]'
+                      : 'hover:bg-white/80'
+                  } ${inactive ? 'opacity-70' : ''}`}
+                >
+                  <div
+                    className="flex w-12 shrink-0 flex-col items-center rounded-lg border border-line bg-white py-1 leading-tight"
+                    title={formatDate(reservation.timeSlot.slotDate)}
+                  >
+                    <span className="text-[0.65rem] font-semibold uppercase text-muted">{date.month}</span>
+                    <span className="font-display text-lg font-semibold text-ink">{date.day}</span>
+                    <span className="text-[0.6rem] text-muted">{date.year}</span>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-ink">
+                        {reservation.timeSlot.startTime.slice(0, 5)}–{reservation.timeSlot.endTime.slice(0, 5)}
+                        {' · '}
+                        {professorName}
+                      </span>
+                      <span
+                        className={`badge badge-reservation-${reservation.status.toLowerCase()} ml-auto shrink-0`}
+                      >
                         {reservationStatusLabel(reservation.status)}
                       </span>
                     </div>
-                    <p className="reservation-card-meta">
-                      Profesor: {professorName}
-                    </p>
                     {(isAdministrator || isProfessor) && (
-                      <p className="reservation-card-meta">
-                        Estudiante: {studentName}
-                      </p>
+                      <p className="truncate text-xs text-muted">Estudiante: {studentName}</p>
                     )}
-                    <ul className="reservation-detail-list">
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
                       {reservation.details.map((detail) => (
-                        <li key={detail.id}>
-                          <span>{detail.consultationType.name}</span>
-                          {detail.comment && <small>{detail.comment}</small>}
-                        </li>
+                        <span
+                          key={detail.id}
+                          title={detail.comment || undefined}
+                          className="inline-flex max-w-full items-center rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent"
+                        >
+                          <span className="truncate">{detail.consultationType.name}</span>
+                          {detail.comment && <span className="ml-1 text-accent/60">•</span>}
+                        </span>
                       ))}
-                    </ul>
-                    {(canEdit || canCancel) && (
-                      <div className="flex flex-wrap gap-2">
-                        {canEdit && (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => startEdit(reservation)}
-                          >
-                            <Pencil size={14} aria-hidden />
-                            Editar
-                          </button>
-                        )}
-                        {canCancel && (
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            onClick={() => setReservationToCancel(reservation)}
-                          >
-                            Cancelar reserva
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </article>
+                    </div>
+                  </div>
+
+                  {(canEdit || canCancel) && (
+                    <div className="flex shrink-0 flex-col gap-1">
+                      {canEdit && (
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-muted hover:bg-accent-soft hover:text-accent"
+                          title="Editar reserva"
+                          aria-label={`Editar reserva del ${formatDate(reservation.timeSlot.slotDate)}`}
+                          onClick={() => startEdit(reservation)}
+                        >
+                          <Pencil size={15} aria-hidden />
+                        </button>
+                      )}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
+                          title="Cancelar reserva"
+                          aria-label={`Cancelar reserva del ${formatDate(reservation.timeSlot.slotDate)}`}
+                          onClick={() => setReservationToCancel(reservation)}
+                        >
+                          <CircleX size={15} aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </li>
               )
             })}
@@ -397,6 +457,11 @@ export function ReservationsPage() {
                       <span>Estudiante</span>
                       <select required value={studentId} onChange={(event) => setStudentId(event.target.value)}>
                         <option value="">Seleccionar estudiante…</option>
+                        {editing && !studentsById.has(editing.studentId) && (
+                          <option value={editing.studentId}>
+                            {editing.studentName ?? 'Estudiante de la reserva'}
+                          </option>
+                        )}
                         {students.map((student) => (
                           <option key={student.id} value={student.id}>
                             {student.firstName} {student.lastName} · {student.email}

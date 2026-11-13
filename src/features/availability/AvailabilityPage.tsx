@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { CircleX, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { TimeSlotDto, UserDto } from '../../types/api'
+import type { TimeSlotDto, TimeSlotStatus, UserDto } from '../../types/api'
 import { parseApiError } from '../../shared/api/client'
 import { createTimeSlotsBatch, deleteTimeSlot, listTimeSlots } from '../../shared/api/availability'
 import { listProfessors } from '../../shared/api/professors'
@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { Pagination } from '../../shared/ui/Pagination'
 import { SearchInput } from '../../shared/ui/SearchInput'
 import { useAuth } from '../auth/AuthContext'
+import { dateParts, durationMinutes, filterControl, filterLabel, longDate } from '../../shared/format'
 
 const PAGE_SIZE = 10
 
@@ -31,15 +32,34 @@ function newRow(): DetailRow {
   }
 }
 
-function statusLabel(status: TimeSlotDto['status']): string {
-  switch (status) {
-    case 'AVAILABLE':
-      return 'Disponible'
-    case 'BOOKED':
-      return 'Reservado'
-    case 'CANCELLED':
-      return 'Cancelado'
+type Period = 'UPCOMING' | 'PAST'
+
+function isoDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** "Hoy" / "Mañana" para los encabezados de día. */
+function relativeDay(day: string): string | null {
+  const today = new Date()
+  if (day === isoDay(today)) return 'Hoy'
+  const tomorrow = new Date(today)
+  tomorrow.setDate(today.getDate() + 1)
+  return day === isoDay(tomorrow) ? 'Mañana' : null
+}
+
+/** Colores y texto por estado; un turno libre de un día pasado se muestra como vencido. */
+function slotLook(status: TimeSlotDto['status'], isPast: boolean) {
+  if (status === 'BOOKED') {
+    return { label: 'Reservado', bar: 'bg-amber-400', dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800', row: '' }
   }
+  if (status === 'CANCELLED') {
+    return { label: 'Cancelado', bar: 'bg-gray-300', dot: 'bg-gray-400', pill: 'bg-gray-100 text-gray-600', row: 'opacity-60' }
+  }
+  if (isPast) {
+    return { label: 'Sin reservar', bar: 'bg-gray-300', dot: 'bg-gray-400', pill: 'bg-gray-100 text-gray-600', row: 'opacity-70' }
+  }
+  return { label: 'Disponible', bar: 'bg-emerald-500', dot: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-800', row: '' }
 }
 
 export function AvailabilityPage() {
@@ -53,6 +73,9 @@ export function AvailabilityPage() {
   const [rows, setRows] = useState<DetailRow[]>([newRow()])
   const [filterProfessorId, setFilterProfessorId] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [filterStatus, setFilterStatus] = useState<TimeSlotStatus | ''>('')
+  const [period, setPeriod] = useState<Period>('UPCOMING')
+  const todayIso = isoDay(new Date())
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -78,6 +101,8 @@ export function AvailabilityPage() {
         size: PAGE_SIZE,
         professorId: filterProfessorId || undefined,
         date: filterDate || undefined,
+        status: filterStatus || undefined,
+        period: filterDate ? undefined : period,
         q: query || undefined,
       })
       setSlots(result.content ?? [])
@@ -88,7 +113,7 @@ export function AvailabilityPage() {
     } finally {
       setLoading(false)
     }
-  }, [filterProfessorId, filterDate, page, query])
+  }, [filterProfessorId, filterDate, filterStatus, page, period, query])
 
   useEffect(() => {
     void loadSlots()
@@ -101,6 +126,27 @@ export function AvailabilityPage() {
       setHeader((h) => (h.professorId ? h : { ...h, professorId: list[0]?.id ?? '' }))
     })
   }, [])
+
+  /** Turnos agrupados por día (el backend ya los devuelve ordenados por fecha y hora). */
+  const groupedSlots = useMemo(() => {
+    const groups = new Map<string, TimeSlotDto[]>()
+    for (const slot of slots) {
+      const list = groups.get(slot.slotDate) ?? []
+      list.push(slot)
+      groups.set(slot.slotDate, list)
+    }
+    return [...groups.entries()]
+  }, [slots])
+
+  const hasFilters = Boolean(query || filterProfessorId || filterDate || filterStatus)
+
+  function clearFilters() {
+    setQuery('')
+    setFilterProfessorId('')
+    setFilterDate('')
+    setFilterStatus('')
+    setPage(0)
+  }
 
   function addRow() {
     setRows((r) => [...r, newRow()])
@@ -193,8 +239,11 @@ export function AvailabilityPage() {
       <div
         className={`master-detail${canManageAvailability ? '' : ' master-detail--single'}`}
       >
-        <section className="panel panel-list" aria-label="Turnos existentes">
-          <div className="panel-toolbar filters-toolbar flex-wrap">
+        <section
+          className="panel flex min-h-[420px] flex-col lg:h-[calc(100vh-11rem)]"
+          aria-label="Turnos existentes"
+        >
+          <div className="flex flex-col gap-2 border-b border-line bg-white/65 p-3">
             <SearchInput
               value={query}
               placeholder="Buscar por nombre del profesor…"
@@ -204,75 +253,182 @@ export function AvailabilityPage() {
                 setPage(0)
               }}
             />
-            <label className="field field-compact">
-              <span>Profesor</span>
-              <select
-                value={filterProfessorId}
-                onChange={(e) => {
-                  setFilterProfessorId(e.target.value)
-                  setPage(0)
-                }}
+            <div className="flex rounded-lg bg-[#efe9df] p-1" role="tablist" aria-label="Período">
+              {(
+                [
+                  ['UPCOMING', 'Próximos'],
+                  ['PAST', 'Pasados'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={period === value && !filterDate}
+                  disabled={Boolean(filterDate)}
+                  onClick={() => {
+                    setPeriod(value)
+                    setPage(0)
+                  }}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    period === value && !filterDate
+                      ? 'bg-white text-ink shadow-sm'
+                      : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <label className={filterLabel}>
+                Profesor
+                <select
+                  className={filterControl}
+                  value={filterProfessorId}
+                  onChange={(e) => {
+                    setFilterProfessorId(e.target.value)
+                    setPage(0)
+                  }}
+                >
+                  <option value="">Todos</option>
+                  {professors.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.firstName} {p.lastName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterLabel}>
+                Fecha
+                <input
+                  type="date"
+                  className={filterControl}
+                  value={filterDate}
+                  onChange={(e) => {
+                    setFilterDate(e.target.value)
+                    setPage(0)
+                  }}
+                />
+              </label>
+              <label className={filterLabel}>
+                Estado
+                <select
+                  className={filterControl}
+                  value={filterStatus}
+                  onChange={(e) => {
+                    setFilterStatus(e.target.value as TimeSlotStatus | '')
+                    setPage(0)
+                  }}
+                >
+                  <option value="">Todos</option>
+                  <option value="AVAILABLE">Disponibles</option>
+                  <option value="BOOKED">Reservados</option>
+                  <option value="CANCELLED">Cancelados</option>
+                </select>
+              </label>
+            </div>
+            {hasFilters && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 self-end rounded-md px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent-soft"
+                onClick={clearFilters}
               >
-                <option value="">Todos</option>
-                {professors.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field field-compact">
-              <span>Fecha</span>
-              <input
-                type="date"
-                value={filterDate}
-                onChange={(e) => {
-                  setFilterDate(e.target.value)
-                  setPage(0)
-                }}
-              />
-            </label>
-          </div>
-          <ul className="entity-list">
-            {loading && <li className="entity-list-empty">Cargando…</li>}
-            {!loading && slots.length === 0 && (
-              <li className="entity-list-empty">No hay turnos con estos filtros.</li>
+                <X size={13} aria-hidden />
+                Limpiar filtros
+              </button>
             )}
-            {slots.map((slot) => {
-              const prof = professorMap.get(slot.professorId)
-              return (
-                <li key={slot.id}>
-                  <div className="slot-row">
-                    <div className="slot-row-main">
-                      <span className="entity-row-title">
-                        {slot.slotDate} · {slot.startTime.slice(0, 5)}–
-                        {slot.endTime.slice(0, 5)}
-                      </span>
-                      <span className="entity-row-meta">
-                        {slot.professorName ??
-                          (prof ? `${prof.firstName} ${prof.lastName}` : 'Profesor')}
-                      </span>
-                    </div>
-                    <div className="slot-row-actions">
-                      <span className={`badge badge-status-${slot.status.toLowerCase()}`}>
-                        {statusLabel(slot.status)}
-                      </span>
-                      {canManageAvailability && slot.status !== 'CANCELLED' && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm slot-row-cancel"
-                          onClick={() => requestCancelSlot(slot)}
-                        >
-                          <CircleX size={15} aria-hidden />
-                          Cancelar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#f6f2ea] p-3">
+            {loading && <p className="entity-list-empty">Cargando turnos…</p>}
+            {!loading && slots.length === 0 && (
+              <p className="entity-list-empty">
+                {period === 'UPCOMING' && !filterDate
+                  ? 'No hay turnos próximos con estos filtros.'
+                  : 'No hay turnos con estos filtros.'}
+              </p>
+            )}
+            {!loading &&
+              groupedSlots.map(([day, daySlots]) => {
+                const date = dateParts(day)
+                const relative = relativeDay(day)
+                const isPast = day < todayIso
+                const free = daySlots.filter((slot) => slot.status === 'AVAILABLE').length
+                return (
+                  <article
+                    key={day}
+                    className="overflow-hidden rounded-xl border border-line bg-white shadow-sm"
+                    aria-label={longDate(day)}
+                  >
+                    <header className="flex items-center gap-3 border-b border-line/70 bg-surface px-3 py-2">
+                      <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-accent text-white">
+                        <span className="text-[0.6rem] font-semibold uppercase leading-none">{date.month}</span>
+                        <span className="font-display text-lg leading-tight">{date.day}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-ink">
+                          {longDate(day)}
+                          {relative && (
+                            <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-accent">
+                              {relative}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted">
+                          {daySlots.length} {daySlots.length === 1 ? 'turno' : 'turnos'}
+                          {!isPast && ` · ${free} ${free === 1 ? 'libre' : 'libres'}`}
+                        </p>
+                      </div>
+                    </header>
+                    <ul className="m-0 list-none divide-y divide-line/50 p-0">
+                      {daySlots.map((slot) => {
+                        const prof = professorMap.get(slot.professorId)
+                        const professorName =
+                          slot.professorName ??
+                          (prof ? `${prof.firstName} ${prof.lastName}` : 'Profesor')
+                        const look = slotLook(slot.status, isPast)
+                        return (
+                          <li key={slot.id} className={`flex items-center gap-3 py-2 pr-2 pl-0 ${look.row}`}>
+                            <span className={`w-1 self-stretch rounded-r ${look.bar}`} aria-hidden />
+                            <div className="w-24 shrink-0">
+                              <p className="text-sm font-semibold tabular-nums text-ink">
+                                {slot.startTime.slice(0, 5)} – {slot.endTime.slice(0, 5)}
+                              </p>
+                              <p className="text-[0.7rem] text-muted">
+                                {durationMinutes(slot.startTime, slot.endTime)} min
+                              </p>
+                            </div>
+                            <p className="min-w-0 flex-1 truncate text-sm text-ink">{professorName}</p>
+                            <span
+                              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${look.pill}`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full ${look.dot}`} aria-hidden />
+                              {look.label}
+                            </span>
+                            {canManageAvailability && (
+                              <span className="w-8 shrink-0">
+                                {slot.status !== 'CANCELLED' && !isPast && (
+                                  <button
+                                    type="button"
+                                    className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger"
+                                    title="Cancelar turno"
+                                    aria-label={`Cancelar turno de las ${slot.startTime.slice(0, 5)} del ${longDate(slot.slotDate)}`}
+                                    onClick={() => requestCancelSlot(slot)}
+                                  >
+                                    <CircleX size={16} aria-hidden />
+                                  </button>
+                                )}
+                              </span>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </article>
+                )
+              })}
+          </div>
           <Pagination
             page={page}
             totalPages={totalPages}

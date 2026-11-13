@@ -39,6 +39,8 @@ export interface UserCreateDto {
 }
 
 export interface UserUpdateDto {
+  /** Si cambia, ms-users mueve el usuario al nuevo tipo (estudiante/profesor/administrador). */
+  type?: UserType
   email: string
   firstName: string
   lastName: string

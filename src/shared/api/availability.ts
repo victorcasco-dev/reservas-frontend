@@ -14,6 +14,8 @@ export async function listTimeSlots(params?: {
   date?: string
   status?: TimeSlotStatus
   q?: string
+  /** UPCOMING (desde hoy, ascendente) o PAST (antes de hoy, descendente). */
+  period?: 'UPCOMING' | 'PAST'
 }): Promise<TimeSlotPageDto> {
   const { data } = await api.get<TimeSlotPageDto>('/time-slots', { params })
   return data

@@ -38,11 +38,7 @@ export function LoginPage() {
         <div className="login-brand">
           <span className="login-mark" aria-hidden />
           <div>
-            <h1>Tutorías y tesis</h1>
-            <p className="login-lead">
-              Accedé con tu cuenta para gestionar usuarios y disponibilidad a través del
-              gateway.
-            </p>
+            <h1>Reserva de Tutorías de Tesis</h1>
           </div>
         </div>
 

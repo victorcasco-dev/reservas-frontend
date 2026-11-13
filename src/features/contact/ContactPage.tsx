@@ -1,15 +1,17 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { ContactInquiryCreateDto } from '../../types/api'
 import { sendContactInquiry } from '../../shared/api/contact'
 import { parseApiError } from '../../shared/api/client'
+import { useAuth } from '../auth/AuthContext'
 
 const initialForm: ContactInquiryCreateDto = { name: '', email: '', message: '' }
 
 export function ContactPage() {
   const [form, setForm] = useState(initialForm)
   const [submitting, setSubmitting] = useState(false)
+  const { isAuthenticated, loading } = useAuth()
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -27,6 +29,11 @@ export function ContactPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // El formulario de contacto es solo para quien todavía no inició sesión.
+  if (!loading && isAuthenticated) {
+    return <Navigate to="/availability" replace />
   }
 
   return (
