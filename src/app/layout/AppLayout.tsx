@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, CalendarDays, ClipboardList, LogOut, MessageCircle, Users } from 'lucide-react'
+import { Bell, CalendarDays, ClipboardList, LogOut, MessageCircle, Tags, Users } from 'lucide-react'
 import { useAuth } from '../../features/auth/AuthContext'
 import { formatRoles } from '../../shared/roleLabels'
 
@@ -34,6 +34,10 @@ export function AppLayout() {
               <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'active' : '')}>
                 <Bell size={18} strokeWidth={2} aria-hidden />
                 Notificaciones
+              </NavLink>
+              <NavLink to="/consultation-types" className={({ isActive }) => (isActive ? 'active' : '')}>
+                <Tags size={18} strokeWidth={2} aria-hidden />
+                Tipos de consulta
               </NavLink>
               <NavLink to="/users" className={({ isActive }) => (isActive ? 'active' : '')}>
                 <Users size={18} strokeWidth={2} aria-hidden />

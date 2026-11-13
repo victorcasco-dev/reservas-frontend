@@ -8,11 +8,14 @@ import {
   deleteUser,
   getUserRoles,
   listUsers,
-  replaceUserRoles,
   updateUser,
 } from '../../shared/api/users'
 import { listProfessors } from '../../shared/api/professors'
 import { roleLabel } from '../../shared/roleLabels'
+import { Pagination } from '../../shared/ui/Pagination'
+import { SearchInput } from '../../shared/ui/SearchInput'
+
+const PAGE_SIZE = 10
 
 const USER_TYPES: UserType[] = ['STUDENT', 'PROFESSOR', 'ADMINISTRATOR']
 const ALL_ROLES: Role[] = ['STUDENT', 'PROFESSOR', 'ADMINISTRATOR']
@@ -59,20 +62,25 @@ export function UsersPage() {
   const [header, setHeader] = useState<HeaderForm>(emptyHeader)
   const [detail, setDetail] = useState<DetailForm>(emptyDetail)
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState<number | undefined>()
   const [loadingList, setLoadingList] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const loadList = useCallback(async () => {
     setLoadingList(true)
     try {
-      const page = await listUsers({ page: 0, size: 50, q: query || undefined })
-      setUsers(page.content ?? [])
+      const result = await listUsers({ page, size: PAGE_SIZE, q: query || undefined })
+      setUsers(result.content ?? [])
+      setTotalPages(result.page?.totalPages ?? 0)
+      setTotalElements(result.page?.totalElements)
     } catch (e) {
       toast.error(parseApiError(e))
     } finally {
       setLoadingList(false)
     }
-  }, [query])
+  }, [page, query])
 
   useEffect(() => {
     void loadList()
@@ -142,8 +150,8 @@ export function UsersPage() {
           academicTitle: detail.academicTitle || undefined,
           position: detail.position || undefined,
           tutorProfessorId: detail.tutorProfessorId || undefined,
+          roles: detail.roles,
         })
-        await replaceUserRoles(created.id, detail.roles)
         toast.success('Usuario creado')
         await loadList()
         await selectUser(created)
@@ -157,8 +165,8 @@ export function UsersPage() {
           academicTitle: detail.academicTitle || undefined,
           position: detail.position || undefined,
           tutorProfessorId: detail.tutorProfessorId || undefined,
+          roles: detail.roles,
         })
-        await replaceUserRoles(selectedId, detail.roles)
         toast.success('Cambios guardados')
         await loadList()
       }
@@ -208,12 +216,14 @@ export function UsersPage() {
       <div className="master-detail">
         <section className="panel panel-list" aria-label="Listado de usuarios">
           <div className="panel-toolbar">
-            <input
-              type="search"
-              placeholder="Buscar por nombre o correo…"
+            <SearchInput
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Buscar usuarios"
+              placeholder="Buscar por nombre o correo…"
+              label="Buscar usuarios"
+              onChange={(value) => {
+                setQuery(value)
+                setPage(0)
+              }}
             />
             <button type="button" className="btn btn-primary btn-sm" onClick={startCreate}>
               <Plus size={16} aria-hidden />
@@ -243,6 +253,13 @@ export function UsersPage() {
               </li>
             ))}
           </ul>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            loading={loadingList}
+            onChange={setPage}
+          />
         </section>
 
         <section className="panel panel-form" aria-label="Formulario de usuario">

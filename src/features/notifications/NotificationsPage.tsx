@@ -17,6 +17,8 @@ import {
 } from '../../shared/api/notifications'
 import { listUsers } from '../../shared/api/users'
 import { parseApiError } from '../../shared/api/client'
+import { Pagination } from '../../shared/ui/Pagination'
+import { SearchInput } from '../../shared/ui/SearchInput'
 
 const PAGE_SIZE = 10
 const TYPES: NotificationType[] = [
@@ -74,6 +76,7 @@ export function NotificationsPage() {
   const [notificationType, setNotificationType] = useState<NotificationType | ''>('')
   const [notificationStatus, setNotificationStatus] = useState<NotificationDto['status'] | ''>('')
   const [templateQuery, setTemplateQuery] = useState('')
+  const [notificationQuery, setNotificationQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [notificationPage, setNotificationPage] = useState(0)
   const [templatePage, setTemplatePage] = useState(0)
@@ -100,6 +103,7 @@ export function NotificationsPage() {
         size: PAGE_SIZE,
         type: notificationType || undefined,
         status: notificationStatus || undefined,
+        q: notificationQuery || undefined,
       })
       setNotifications(result.content ?? [])
       setNotificationPages(result.page?.totalPages ?? 0)
@@ -108,7 +112,7 @@ export function NotificationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [notificationPage, notificationStatus, notificationType])
+  }, [notificationPage, notificationQuery, notificationStatus, notificationType])
 
   const loadTemplates = useCallback(async () => {
     setLoading(true)
@@ -257,7 +261,16 @@ export function NotificationsPage() {
 
       {section === 'history' && (
         <section className="panel notifications-panel" aria-label="Historial de notificaciones">
-          <div className="panel-toolbar filters-toolbar notification-filters">
+          <div className="panel-toolbar filters-toolbar notification-filters flex-wrap">
+            <SearchInput
+              value={notificationQuery}
+              placeholder="Buscar destinatario por nombre o correo…"
+              label="Buscar notificaciones"
+              onChange={(value) => {
+                setNotificationQuery(value)
+                setNotificationPage(0)
+              }}
+            />
             <label className="field field-compact">
               <span>Tipo</span>
               <select
@@ -295,7 +308,7 @@ export function NotificationsPage() {
                 {!loading && notifications.map((notification) => (
                   <tr key={notification.id}>
                     <td>{notificationTypeLabel(notification.type)}</td>
-                    <td>{userNames.get(notification.userId) ?? notification.userId}</td>
+                    <td>{notification.userName ?? userNames.get(notification.userId) ?? 'Usuario'}</td>
                     <td>
                       <span className={`badge badge-notification-${notification.status.toLowerCase()}`}>
                         {notificationStatusLabel(notification.status)}
@@ -321,13 +334,12 @@ export function NotificationsPage() {
         <div className="master-detail">
           <section className="panel panel-list" aria-label="Plantillas de correo">
             <div className="panel-toolbar template-toolbar">
-              <input
-                type="search"
-                placeholder="Buscar código o asunto…"
-                aria-label="Buscar plantillas"
+              <SearchInput
                 value={templateQuery}
-                onChange={(event) => {
-                  setTemplateQuery(event.target.value)
+                placeholder="Buscar código o asunto…"
+                label="Buscar plantillas"
+                onChange={(value) => {
+                  setTemplateQuery(value)
                   setTemplatePage(0)
                 }}
               />
@@ -487,28 +499,3 @@ export function NotificationsPage() {
   )
 }
 
-function Pagination({
-  page,
-  totalPages,
-  loading,
-  onChange,
-}: {
-  page: number
-  totalPages: number
-  loading: boolean
-  onChange: (page: number) => void
-}) {
-  return (
-    <div className="pagination-bar">
-      <span>Página {page + 1}{totalPages ? ` de ${totalPages}` : ''}</span>
-      <div>
-        <button type="button" className="btn btn-secondary btn-sm" disabled={page === 0 || loading} onClick={() => onChange(page - 1)}>
-          Anterior
-        </button>
-        <button type="button" className="btn btn-secondary btn-sm" disabled={loading || page + 1 >= totalPages} onClick={() => onChange(page + 1)}>
-          Siguiente
-        </button>
-      </div>
-    </div>
-  )
-}

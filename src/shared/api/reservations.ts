@@ -21,6 +21,7 @@ export async function searchReservations(params?: {
   status?: ReservationStatus
   dateFrom?: string
   dateTo?: string
+  q?: string
   page?: number
   size?: number
 }): Promise<PageResponseDto<ReservationDto>> {

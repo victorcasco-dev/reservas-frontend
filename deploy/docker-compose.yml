@@ -1,0 +1,170 @@
+# Stack completo de Reservas: Eureka + Redis (+ Redis Insight) + 4 microservicios + API Gateway + frontend.
+#
+# Supone que los repos están clonados como hermanos:
+#   <carpeta>/api-gateway  eureka-server  commons/commons  ms-users  ms-availability
+#   <carpeta>/sr-microservicios-rodrigo/{ms-reservas,ms-notificaciones}  frontend
+#
+# Uso:  deploy/up.ps1 (Windows)  o  deploy/up.sh (Linux/macOS/Git Bash)
+#       o directamente: docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+name: reservas
+
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [reservas]
+  depends_on:
+    eureka-server:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+x-common-env: &common-env
+  EUREKA_URL: http://eureka-server:8761/eureka/
+  EUREKA_PREFER_IP: "false"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  DB_URL: ${DB_URL:?Definí DB_URL en deploy/.env}
+  DB_USERNAME: ${DB_USERNAME:?Definí DB_USERNAME en deploy/.env}
+  DB_PASSWORD: ${DB_PASSWORD:?Definí DB_PASSWORD en deploy/.env}
+  JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET en deploy/.env}
+  JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}
+  JWT_ISSUER: ${JWT_ISSUER:-reservas-ms-users}
+  DB_POOL_MAX: "4"
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["${REDIS_PORT:-6379}:6379"]
+    networks: [reservas]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-insight:
+    image: redis/redisinsight:2.70
+    ports: ["${REDIS_INSIGHT_PORT:-5540}:5540"]
+    networks: [reservas]
+    environment:
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      RI_REDIS_ALIAS: reservas-redis
+      RI_ACCEPT_TERMS_AND_CONDITIONS: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  eureka-server:
+    build: ../../eureka-server
+    image: reservas/eureka-server
+    restart: unless-stopped
+    ports: ["${EUREKA_PORT:-8761}:8761"]
+    networks: [reservas]
+    environment:
+      EUREKA_SERVER_PORT: "8761"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8761' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 15s
+
+  ms-users:
+    <<: *java-service
+    build:
+      context: ../../ms-users
+      additional_contexts:
+        commons: ../../commons/commons
+    image: reservas/ms-users
+    environment:
+      <<: *common-env
+      SERVER_PORT: "8081"
+      EUREKA_INSTANCE_HOSTNAME: ms-users
+      LOG_FILE: logs/ms-users.log
+      SECURITY_BOOTSTRAP_ENABLED: "true"
+      SECURITY_BOOTSTRAP_EMAIL: ${SECURITY_BOOTSTRAP_EMAIL:-admin@reservas.local}
+      SECURITY_BOOTSTRAP_PASSWORD: ${SECURITY_BOOTSTRAP_PASSWORD:-ChangeMe123!}
+    healthcheck: &tcp-health
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/$${SERVER_PORT}' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 30s
+
+  ms-availability:
+    <<: *java-service
+    build:
+      context: ../../ms-availability
+      additional_contexts:
+        commons: ../../commons/commons
+    image: reservas/ms-availability
+    environment:
+      <<: *common-env
+      SERVER_PORT: "8082"
+      EUREKA_INSTANCE_HOSTNAME: ms-availability
+      LOG_FILE: logs/ms-availability.log
+    healthcheck: *tcp-health
+
+  ms-notificaciones:
+    <<: *java-service
+    build:
+      context: ../../sr-microservicios-rodrigo/ms-notificaciones
+      additional_contexts:
+        commons: ../../commons/commons
+    image: reservas/ms-notificaciones
+    environment:
+      <<: *common-env
+      SERVER_PORT: "8083"
+      EUREKA_INSTANCE_HOSTNAME: ms-notificaciones
+      EUREKA_ENABLED: "true"
+      LIQUIBASE_ENABLED: "false"
+      MAIL_ENABLED: "false"
+    healthcheck: *tcp-health
+
+  ms-reservas:
+    <<: *java-service
+    build:
+      context: ../../sr-microservicios-rodrigo/ms-reservas
+      additional_contexts:
+        commons: ../../commons/commons
+    image: reservas/ms-reservas
+    environment:
+      <<: *common-env
+      SERVER_PORT: "8084"
+      EUREKA_INSTANCE_HOSTNAME: ms-reservas
+      EUREKA_ENABLED: "true"
+      LIQUIBASE_ENABLED: "false"
+    healthcheck: *tcp-health
+
+  api-gateway:
+    build: ../../api-gateway
+    image: reservas/api-gateway
+    restart: unless-stopped
+    ports: ["${GATEWAY_PORT:-8080}:8080"]
+    networks: [reservas]
+    environment:
+      SERVER_PORT: "8080"
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: api-gateway
+      EUREKA_PREFER_IP: "false"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}
+      JWT_ISSUER: ${JWT_ISSUER:-reservas-ms-users}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    healthcheck: *tcp-health
+
+  frontend:
+    build: ..
+    image: reservas/frontend
+    restart: unless-stopped
+    ports: ["${FRONTEND_PORT:-5173}:80"]
+    networks: [reservas]
+    depends_on:
+      - api-gateway
+
+networks:
+  reservas:
+    name: reservas

@@ -3,10 +3,14 @@ import { CircleX, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { TimeSlotDto, UserDto } from '../../types/api'
 import { parseApiError } from '../../shared/api/client'
-import { createTimeSlot, deleteTimeSlot, listTimeSlots } from '../../shared/api/availability'
+import { createTimeSlotsBatch, deleteTimeSlot, listTimeSlots } from '../../shared/api/availability'
 import { listProfessors } from '../../shared/api/professors'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
+import { Pagination } from '../../shared/ui/Pagination'
+import { SearchInput } from '../../shared/ui/SearchInput'
 import { useAuth } from '../auth/AuthContext'
+
+const PAGE_SIZE = 10
 
 interface HeaderForm {
   professorId: string
@@ -49,6 +53,10 @@ export function AvailabilityPage() {
   const [rows, setRows] = useState<DetailRow[]>([newRow()])
   const [filterProfessorId, setFilterProfessorId] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState<number | undefined>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [slotToCancel, setSlotToCancel] = useState<TimeSlotDto | null>(null)
@@ -65,19 +73,22 @@ export function AvailabilityPage() {
   const loadSlots = useCallback(async () => {
     setLoading(true)
     try {
-      const page = await listTimeSlots({
-        page: 0,
-        size: 100,
+      const result = await listTimeSlots({
+        page,
+        size: PAGE_SIZE,
         professorId: filterProfessorId || undefined,
         date: filterDate || undefined,
+        q: query || undefined,
       })
-      setSlots(page.content ?? [])
+      setSlots(result.content ?? [])
+      setTotalPages(result.page?.totalPages ?? 0)
+      setTotalElements(result.page?.totalElements)
     } catch (e) {
       toast.error(parseApiError(e))
     } finally {
       setLoading(false)
     }
-  }, [filterProfessorId, filterDate])
+  }, [filterProfessorId, filterDate, page, query])
 
   useEffect(() => {
     void loadSlots()
@@ -111,20 +122,19 @@ export function AvailabilityPage() {
     }
     setSaving(true)
     try {
-      for (const row of rows) {
-        await createTimeSlot({
-          professorId: header.professorId,
-          slotDate: header.slotDate,
-          startTime: row.startTime,
-          endTime: row.endTime,
-        })
-      }
+      // Una sola petición con el DTO compuesto (cabecera + franjas).
+      await createTimeSlotsBatch({
+        professorId: header.professorId,
+        slotDate: header.slotDate,
+        slots: rows.map(({ startTime, endTime }) => ({ startTime, endTime })),
+      })
       toast.success(
         rows.length === 1
           ? 'Turno creado'
           : `${rows.length} turnos creados para la misma fecha`,
       )
       setRows([newRow()])
+      setPage(0)
       await loadSlots()
     } catch (err) {
       toast.error(parseApiError(err))
@@ -184,12 +194,24 @@ export function AvailabilityPage() {
         className={`master-detail${canManageAvailability ? '' : ' master-detail--single'}`}
       >
         <section className="panel panel-list" aria-label="Turnos existentes">
-          <div className="panel-toolbar filters-toolbar">
+          <div className="panel-toolbar filters-toolbar flex-wrap">
+            <SearchInput
+              value={query}
+              placeholder="Buscar por nombre del profesor…"
+              label="Buscar turnos"
+              onChange={(value) => {
+                setQuery(value)
+                setPage(0)
+              }}
+            />
             <label className="field field-compact">
               <span>Profesor</span>
               <select
                 value={filterProfessorId}
-                onChange={(e) => setFilterProfessorId(e.target.value)}
+                onChange={(e) => {
+                  setFilterProfessorId(e.target.value)
+                  setPage(0)
+                }}
               >
                 <option value="">Todos</option>
                 {professors.map((p) => (
@@ -204,7 +226,10 @@ export function AvailabilityPage() {
               <input
                 type="date"
                 value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
+                onChange={(e) => {
+                  setFilterDate(e.target.value)
+                  setPage(0)
+                }}
               />
             </label>
           </div>
@@ -224,7 +249,8 @@ export function AvailabilityPage() {
                         {slot.endTime.slice(0, 5)}
                       </span>
                       <span className="entity-row-meta">
-                        {prof ? `${prof.firstName} ${prof.lastName}` : slot.professorId}
+                        {slot.professorName ??
+                          (prof ? `${prof.firstName} ${prof.lastName}` : 'Profesor')}
                       </span>
                     </div>
                     <div className="slot-row-actions">
@@ -247,6 +273,13 @@ export function AvailabilityPage() {
               )
             })}
           </ul>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            loading={loading}
+            onChange={setPage}
+          />
         </section>
 
         {canManageAvailability && (

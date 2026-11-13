@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { isAxiosError } from 'axios'
 import type {
@@ -18,9 +18,12 @@ import {
   cancelReservation,
   createReservation,
   searchReservations,
+  updateReservation,
 } from '../../shared/api/reservations'
 import { listUsers } from '../../shared/api/users'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
+import { Pagination } from '../../shared/ui/Pagination'
+import { SearchInput } from '../../shared/ui/SearchInput'
 import { useAuth } from '../auth/AuthContext'
 
 const PAGE_SIZE = 10
@@ -67,6 +70,9 @@ export function ReservationsPage() {
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState<number | undefined>()
+  const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<ReservationDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingOptions, setLoadingOptions] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -98,15 +104,17 @@ export function ReservationsPage() {
         status: statusFilter || undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
+        q: query || undefined,
       })
       setReservations(result.content ?? [])
       setTotalPages(result.page?.totalPages ?? 0)
+      setTotalElements(result.page?.totalElements)
     } catch (error) {
       toast.error(parseApiError(error))
     } finally {
       setLoading(false)
     }
-  }, [dateFrom, dateTo, isAdministrator, isProfessor, isStudent, page, statusFilter, user])
+  }, [dateFrom, dateTo, isAdministrator, isProfessor, isStudent, page, query, statusFilter, user])
 
   const loadBookingOptions = useCallback(async () => {
     setLoadingOptions(true)
@@ -145,6 +153,34 @@ export function ReservationsPage() {
       .catch((error: unknown) => toast.error(parseApiError(error)))
   }, [isAdministrator])
 
+  /** Opciones del select de turno: los libres más el turno actual si se está editando. */
+  const slotOptions = useMemo(() => {
+    if (!editing || availableSlots.some((slot) => slot.id === editing.timeSlot.id)) {
+      return availableSlots
+    }
+    return [editing.timeSlot, ...availableSlots]
+  }, [availableSlots, editing])
+
+  function startEdit(reservation: ReservationDto) {
+    setEditing(reservation)
+    setStudentId(reservation.studentId)
+    setSlotId(reservation.timeSlot.id)
+    setRows(
+      reservation.details.map((detail) => ({
+        rowId: crypto.randomUUID(),
+        consultationTypeId: detail.consultationType.id,
+        comment: detail.comment ?? '',
+      })),
+    )
+  }
+
+  function resetForm() {
+    setEditing(null)
+    setRows([newDetailRow()])
+    setSlotId('')
+    if (isAdministrator) setStudentId('')
+  }
+
   function updateDetail(rowId: string, patch: Partial<DetailRow>) {
     setRows((current) => current.map((row) => row.rowId === rowId ? { ...row, ...patch } : row))
   }
@@ -156,19 +192,25 @@ export function ReservationsPage() {
       return
     }
     setSaving(true)
+    // Cabecera (estudiante + turno) y detalles viajan juntos en un único DTO compuesto.
+    const body = {
+      studentId,
+      timeSlotId: slotId,
+      details: rows.map(({ consultationTypeId, comment }) => ({
+        consultationTypeId,
+        comment: comment?.trim() || undefined,
+      })),
+    }
     try {
-      await createReservation({
-        studentId,
-        timeSlotId: slotId,
-        details: rows.map(({ consultationTypeId, comment }) => ({
-          consultationTypeId,
-          comment: comment?.trim() || undefined,
-        })),
-      })
-      toast.success('Reserva creada')
-      setRows([newDetailRow()])
-      setSlotId('')
-      setPage(0)
+      if (editing) {
+        await updateReservation(editing.id, body)
+        toast.success('Reserva actualizada')
+      } else {
+        await createReservation(body)
+        toast.success('Reserva creada')
+        setPage(0)
+      }
+      resetForm()
       await Promise.all([loadReservations(), loadBookingOptions()])
     } catch (error) {
       toast.error(parseApiError(error))
@@ -218,7 +260,16 @@ export function ReservationsPage() {
 
       <div className={`master-detail${canCreate ? '' : ' master-detail--single'}`}>
         <section className="panel panel-list" aria-label="Listado de reservas">
-          <div className="panel-toolbar filters-toolbar reservation-filters">
+          <div className="panel-toolbar filters-toolbar reservation-filters flex-wrap">
+            <SearchInput
+              value={query}
+              placeholder="Buscar por estudiante, profesor o tipo…"
+              label="Buscar reservas"
+              onChange={(value) => {
+                setQuery(value)
+                setPage(0)
+              }}
+            />
             <label className="field field-compact">
               <span>Estado</span>
               <select
@@ -256,7 +307,15 @@ export function ReservationsPage() {
                 || (isStudent && reservation.studentId === user?.userId)
                 || (isProfessor && reservation.timeSlot.professorId === user?.userId)
               const canCancel = isOwner && ['PENDING', 'CONFIRMED'].includes(reservation.status)
+              const canEdit = canCancel && canCreate
               const student = studentsById.get(reservation.studentId)
+              const studentName =
+                reservation.studentName ??
+                (student ? `${student.firstName} ${student.lastName}` : 'Estudiante')
+              const professorName =
+                reservation.timeSlot.professorName ??
+                professorNames.get(reservation.timeSlot.professorId) ??
+                'Profesor'
               return (
                 <li key={reservation.id} className="reservation-list-item">
                   <article className="reservation-card">
@@ -272,11 +331,11 @@ export function ReservationsPage() {
                       </span>
                     </div>
                     <p className="reservation-card-meta">
-                      Profesor: {professorNames.get(reservation.timeSlot.professorId) ?? reservation.timeSlot.professorId}
+                      Profesor: {professorName}
                     </p>
                     {(isAdministrator || isProfessor) && (
                       <p className="reservation-card-meta">
-                        Estudiante: {student ? `${student.firstName} ${student.lastName}` : reservation.studentId}
+                        Estudiante: {studentName}
                       </p>
                     )}
                     <ul className="reservation-detail-list">
@@ -287,48 +346,48 @@ export function ReservationsPage() {
                         </li>
                       ))}
                     </ul>
-                    {canCancel && (
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        onClick={() => setReservationToCancel(reservation)}
-                      >
-                        Cancelar reserva
-                      </button>
+                    {(canEdit || canCancel) && (
+                      <div className="flex flex-wrap gap-2">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => startEdit(reservation)}
+                          >
+                            <Pencil size={14} aria-hidden />
+                            Editar
+                          </button>
+                        )}
+                        {canCancel && (
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() => setReservationToCancel(reservation)}
+                          >
+                            Cancelar reserva
+                          </button>
+                        )}
+                      </div>
                     )}
                   </article>
                 </li>
               )
             })}
           </ul>
-          <div className="pagination-bar">
-            <span>Página {page + 1}{totalPages ? ` de ${totalPages}` : ''}</span>
-            <div>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={page === 0 || loading}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={loading || page + 1 >= totalPages}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            loading={loading}
+            onChange={setPage}
+          />
         </section>
 
         {canCreate && (
           <section className="panel panel-form" aria-label="Crear una reserva">
             <form className="stack-form" onSubmit={(event) => void submitReservation(event)}>
               <div className="form-section">
-                <h2>Nueva reserva</h2>
+                <h2>{editing ? 'Editar reserva' : 'Nueva reserva'}</h2>
                 <p className="section-description">
                   Seleccioná un turno libre y uno o más motivos de consulta.
                 </p>
@@ -354,10 +413,10 @@ export function ReservationsPage() {
                     <span>Turno disponible</span>
                     <select required value={slotId} onChange={(event) => setSlotId(event.target.value)} disabled={loadingOptions}>
                       <option value="">{loadingOptions ? 'Cargando turnos…' : 'Seleccionar turno…'}</option>
-                      {availableSlots.map((slot) => (
+                      {slotOptions.map((slot) => (
                         <option key={slot.id} value={slot.id}>
                           {formatDate(slot.slotDate)} · {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
-                          {' · '}{professorNames.get(slot.professorId) ?? `Profesor ${slot.professorId.slice(0, 8)}`}
+                          {' · '}{slot.professorName ?? professorNames.get(slot.professorId) ?? 'Profesor'}
                         </option>
                       ))}
                     </select>
@@ -419,8 +478,13 @@ export function ReservationsPage() {
               </div>
 
               <div className="form-actions">
+                {editing && (
+                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={resetForm}>
+                    Cancelar edición
+                  </button>
+                )}
                 <button type="submit" className="btn btn-primary" disabled={saving || loadingOptions}>
-                  {saving ? 'Guardando…' : 'Confirmar reserva'}
+                  {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Confirmar reserva'}
                 </button>
               </div>
             </form>

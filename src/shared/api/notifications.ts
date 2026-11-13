@@ -22,6 +22,7 @@ export async function listNotifications(params?: {
 export async function searchNotifications(params?: {
   page?: number
   size?: number
+  q?: string
   userId?: string
   type?: NotificationType
   status?: NotificationDto['status']

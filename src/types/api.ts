@@ -34,6 +34,8 @@ export interface UserCreateDto {
   academicTitle?: string
   position?: string
   tutorProfessorId?: string
+  /** Roles de acceso enviados en el mismo request del alta. */
+  roles?: Role[]
 }
 
 export interface UserUpdateDto {
@@ -45,6 +47,7 @@ export interface UserUpdateDto {
   academicTitle?: string
   position?: string
   tutorProfessorId?: string
+  roles?: Role[]
 }
 
 export interface UserPageDto {
@@ -55,6 +58,7 @@ export interface UserPageDto {
 export interface TimeSlotDto {
   id: string
   professorId: string
+  professorName?: string
   slotDate: string
   startTime: string
   endTime: string
@@ -66,6 +70,13 @@ export interface TimeSlotCreateDto {
   slotDate: string
   startTime: string
   endTime: string
+}
+
+/** DTO compuesto de POST /time-slots/batch: cabecera (profesor + fecha) y detalle (franjas). */
+export interface TimeSlotBatchCreateDto {
+  professorId: string
+  slotDate: string
+  slots: Array<{ startTime: string; endTime: string }>
 }
 
 export interface TimeSlotPageDto {
@@ -102,6 +113,12 @@ export interface PageResponseDto<T> {
 
 export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
 
+export interface CatalogRequestDto {
+  name: string
+  description?: string
+  active?: boolean
+}
+
 export interface CatalogDto {
   id: string
   name: string
@@ -129,6 +146,7 @@ export interface ReservationCreateDto {
 export interface ReservationDto {
   id: string
   studentId: string
+  studentName?: string
   timeSlot: TimeSlotDto
   status: ReservationStatus
   details: ReservationDetailDto[]
@@ -146,6 +164,7 @@ export type NotificationStatus = 'PENDING' | 'SENT' | 'ERROR'
 export interface NotificationDto {
   id: string
   userId: string
+  userName?: string
   type: NotificationType
   channel: NotificationChannel
   status: NotificationStatus
