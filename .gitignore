@@ -23,3 +23,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# WAR de la UI generado por construir-ui-war.ps1
+deploy/distribuido/build/

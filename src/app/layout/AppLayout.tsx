@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Bell, CalendarDays, ClipboardList, LogOut, Tags, Users } from 'lucide-react'
 import { useAuth } from '../../features/auth/AuthContext'
 import { formatRoles } from '../../shared/roleLabels'
+import { UiNodeBadge } from '../../shared/ui/UiNodeBadge'
 
 export function AppLayout() {
   const { user, logout, isAdministrator } = useAuth()
@@ -43,6 +44,7 @@ export function AppLayout() {
           )}
         </nav>
         <div className="sidebar-foot">
+          <UiNodeBadge />
           <div className="user-chip">
             <span className="user-chip-email">{user?.email}</span>
             <span className="user-chip-roles">
