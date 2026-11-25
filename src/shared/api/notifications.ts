@@ -38,6 +38,19 @@ export async function sendNotification(body: NotificationRequestDto): Promise<No
   return data
 }
 
+export interface DispatchResult {
+  processed: number
+  sent: number
+  failed: number
+  remaining: number
+}
+
+/** Envía ya las notificaciones pendientes (mismo proceso que el cron de cada 2 minutos). */
+export async function dispatchPendingNotifications(): Promise<DispatchResult> {
+  const { data } = await api.post<DispatchResult>('/notifications/dispatch')
+  return data
+}
+
 export async function listEmailTemplates(params?: {
   page?: number
   size?: number

@@ -1,3 +1,4 @@
+import { newLocalId } from '../../shared/id'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { CircleX, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -26,7 +27,7 @@ interface DetailRow {
 
 function newRow(): DetailRow {
   return {
-    id: crypto.randomUUID(),
+    id: newLocalId(),
     startTime: '09:00',
     endTime: '09:30',
   }

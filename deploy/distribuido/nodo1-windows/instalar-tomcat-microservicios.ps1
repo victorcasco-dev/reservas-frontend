@@ -119,13 +119,18 @@ foreach ($s in $Services) {
     New-Item -ItemType Directory -Force $appBase | Out-Null
     Remove-Item "$appBase\ROOT" -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item $war.FullName "$appBase\ROOT.war" -Force
+    # Maven genera el WAR con fecha fija (1980, builds reproducibles). Sin esto, Tomcat cree que la
+    # carpeta ya descomprimida es más nueva y sigue sirviendo el código anterior.
+    (Get-Item "$appBase\ROOT.war").LastWriteTime = Get-Date
 
     # .env del servicio (o el de ms-users, igual que el DotenvEnvironmentPostProcessor)
     $envFile = @("$src\.env", "$Root\ms-users\.env") | ? { Test-Path $_ } | Select-Object -First 1
     $params = @{}
     foreach ($line in Get-Content $envFile) {
         if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
-            $params[$Matches[1]] = $Matches[2].Trim().Trim('"')
+            $value = $Matches[2].Trim().Trim('"')
+            # Un valor vacío pisaría el default de application.properties: se omite
+            if ($value -ne '') { $params[$Matches[1]] = $value }
         }
     }
     $params['SERVER_PORT'] = "$($s.Port)"

@@ -1,3 +1,4 @@
+import { newLocalId } from '../../shared/id'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { CircleX, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -41,7 +42,7 @@ interface DetailRow extends ReservationDetailCreateDto {
 }
 
 function newDetailRow(): DetailRow {
-  return { rowId: crypto.randomUUID(), consultationTypeId: '', comment: '' }
+  return { rowId: newLocalId(), consultationTypeId: '', comment: '' }
 }
 
 function reservationStatusLabel(status: ReservationStatus): string {
@@ -168,7 +169,7 @@ export function ReservationsPage() {
     setSlotId(reservation.timeSlot.id)
     setRows(
       reservation.details.map((detail) => ({
-        rowId: crypto.randomUUID(),
+        rowId: newLocalId(),
         consultationTypeId: detail.consultationType.id,
         comment: detail.comment ?? '',
       })),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Bell, FileText, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Bell, FileText, MailCheck, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   EmailTemplateDto,
@@ -9,6 +9,7 @@ import type {
 } from '../../types/api'
 import {
   createEmailTemplate,
+  dispatchPendingNotifications,
   deactivateEmailTemplate,
   searchEmailTemplates,
   searchNotifications,
@@ -84,6 +85,7 @@ export function NotificationsPage() {
   const [templatePages, setTemplatePages] = useState(0)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateDto | null>(null)
   const [templateForm, setTemplateForm] = useState<TemplateForm>(emptyTemplate)
   const [recipientId, setRecipientId] = useState('')
@@ -200,6 +202,26 @@ export function NotificationsPage() {
     }
   }
 
+  async function runDispatch() {
+    setDispatching(true)
+    try {
+      const result = await dispatchPendingNotifications()
+      if (result.processed === 0) {
+        toast.info('No había correos pendientes.')
+      } else if (result.failed === 0) {
+        toast.success(`${result.sent} ${result.sent === 1 ? 'correo enviado' : 'correos enviados'}.`)
+      } else {
+        toast.warning(`${result.sent} enviados, ${result.failed} con error. Revisá el detalle en el historial.`)
+      }
+      setSection('history')
+      await loadNotifications()
+    } catch (error) {
+      toast.error(parseApiError(error))
+    } finally {
+      setDispatching(false)
+    }
+  }
+
   async function submitNotification(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!recipientId) {
@@ -217,7 +239,7 @@ export function NotificationsPage() {
     setSaving(true)
     try {
       await sendNotification({ userId: recipientId, type: sendType, payload: parsedPayload })
-      toast.success('Notificación procesada')
+      toast.success('Notificación encolada: se enviará en el próximo ciclo (o con "Enviar pendientes ahora").')
       setSection('history')
       setNotificationPage(0)
     } catch (error) {
@@ -237,15 +259,31 @@ export function NotificationsPage() {
             manuales.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => void (section === 'templates' ? loadTemplates() : loadNotifications())}
-        >
-          <RefreshCw size={16} aria-hidden />
-          Actualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={dispatching}
+            onClick={() => void runDispatch()}
+            title="Envía ahora los correos pendientes (el envío automático corre cada 2 minutos)"
+          >
+            <MailCheck size={16} aria-hidden />
+            {dispatching ? 'Enviando…' : 'Enviar pendientes ahora'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void (section === 'templates' ? loadTemplates() : loadNotifications())}
+          >
+            <RefreshCw size={16} aria-hidden />
+            Actualizar
+          </button>
+        </div>
       </header>
+      <p className="mb-3 text-sm text-muted">
+        Las reservas y cancelaciones generan correos para el estudiante y el profesor en estado{' '}
+        <strong>Pendiente</strong>. Un proceso automático los envía cada 2 minutos.
+      </p>
 
       <nav className="screen-tabs" aria-label="Secciones de notificaciones">
         <button type="button" className={section === 'history' ? 'active' : ''} onClick={() => setSection('history')}>
