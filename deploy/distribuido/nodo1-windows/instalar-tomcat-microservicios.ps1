@@ -19,10 +19,10 @@ $Home_ = Join-Path $Infra 'tomcat-microservicios'
 $JavaHome = 'C:\Program Files\Java\jdk-25'
 
 $Services = @(
-    @{ Name = 'ms-users';          Port = 8081; Shutdown = $null; Dir = 'ms-users' },
-    @{ Name = 'ms-availability';   Port = 8082; Dir = 'ms-availability' },
-    @{ Name = 'ms-notificaciones'; Port = 8083; Dir = 'sr-microservicios-rodrigo\ms-notificaciones' },
-    @{ Name = 'ms-reservas';       Port = 8084; Dir = 'sr-microservicios-rodrigo\ms-reservas' }
+    @{ Name = 'ms-users';          Port = 8081; Dir = 'ms-users';        Label = 'ms-users · Usuarios, roles y autenticación (JWT)' },
+    @{ Name = 'ms-availability';   Port = 8082; Dir = 'ms-availability'; Label = 'ms-availability · Disponibilidad de turnos' },
+    @{ Name = 'ms-notificaciones'; Port = 8083; Dir = 'sr-microservicios-rodrigo\ms-notificaciones'; Label = 'ms-notificaciones · Correos, plantillas y contacto' },
+    @{ Name = 'ms-reservas';       Port = 8084; Dir = 'sr-microservicios-rodrigo\ms-reservas';       Label = 'ms-reservas · Reservas y tipos de consulta' }
 )
 
 function Escape-Xml([string]$s) { [System.Security.SecurityElement]::Escape($s) }
@@ -140,7 +140,17 @@ foreach ($s in $Services) {
 
     $ctxDir = Join-Path $Home_ "conf\$($s.Name)\localhost"
     New-Item -ItemType Directory -Force $ctxDir | Out-Null
-    "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<!-- Generado desde $envFile -->`r`n<Context>`r`n$paramXml`r`n</Context>" |
+    # Nombre visible en el Manager ("Nombre a Mostrar"). El WAR de Spring Boot no trae web.xml y Tomcat
+    # vaciaría el displayName del Context, así que se usa un descriptor alternativo (altDDName) que solo
+    # declara <display-name>; metadata-complete="false" mantiene el arranque de Spring Boot.
+    @"
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.1" metadata-complete="false">
+  <display-name>$(Escape-Xml $s.Label)</display-name>
+</web-app>
+"@ | Set-Content "$ctxDir\web-display.xml" -Encoding UTF8
+    $altDD = ("$ctxDir\web-display.xml" -replace '\', '/')
+    "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<!-- Generado desde $envFile -->`r`n<Context altDDName=`"$altDD`">`r`n$paramXml`r`n</Context>" |
         Set-Content "$ctxDir\ROOT.xml" -Encoding UTF8
     # Manager de Tomcat en cada servicio para poder detenerlo/iniciarlo (alta/baja en Eureka)
     @"
