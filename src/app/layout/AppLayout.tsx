@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, CalendarDays, ClipboardList, LogOut, Tags, Users } from 'lucide-react'
+import { Bell, BookOpen, CalendarDays, ClipboardList, LogOut, Tags, Users } from 'lucide-react'
 import { useAuth } from '../../features/auth/AuthContext'
 import { formatRoles } from '../../shared/roleLabels'
 import { UiNodeBadge } from '../../shared/ui/UiNodeBadge'
@@ -25,6 +25,10 @@ export function AppLayout() {
           <NavLink to="/reservations" className={({ isActive }) => (isActive ? 'active' : '')}>
             <ClipboardList size={18} strokeWidth={2} aria-hidden />
             Reservas
+          </NavLink>
+          <NavLink to="/research-lines" className={({ isActive }) => (isActive ? 'active' : '')}>
+            <BookOpen size={18} strokeWidth={2} aria-hidden />
+            Líneas de investigación
           </NavLink>
           {isAdministrator && (
             <>

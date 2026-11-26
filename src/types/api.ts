@@ -208,3 +208,13 @@ export interface ContactInquiryDto {
   email: string
   message: string
 }
+
+export type ExperienceLevel = 'BASIC' | 'INTERMEDIATE' | 'EXPERT'
+
+/** Fila de la tabla intermedia professor_research_line (relación muchos a muchos con atributo propio). */
+export interface ProfessorResearchLineDto {
+  id: string
+  professorId: string
+  researchLine: CatalogDto
+  experienceLevel: ExperienceLevel
+}

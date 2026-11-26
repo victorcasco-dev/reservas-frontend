@@ -7,6 +7,7 @@ import { ReservationsPage } from '../features/reservations/ReservationsPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
 import { ConsultationTypesPage } from '../features/consultationTypes/ConsultationTypesPage'
 import { ContactPage } from '../features/contact/ContactPage'
+import { ResearchLinesPage } from '../features/researchLines/ResearchLinesPage'
 import { NotFoundPage, ServerErrorPage } from '../features/errors/ErrorPage'
 import { ProtectedRoute } from './ProtectedRoute'
 import { AdminRoute } from './AdminRoute'
@@ -22,6 +23,7 @@ export function AppRouter() {
           <Route index element={<Navigate to="/availability" replace />} />
           <Route path="availability" element={<AvailabilityPage />} />
           <Route path="reservations" element={<ReservationsPage />} />
+          <Route path="research-lines" element={<ResearchLinesPage />} />
           <Route element={<AdminRoute />}>
             <Route path="users" element={<UsersPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
