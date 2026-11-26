@@ -149,7 +149,7 @@ foreach ($s in $Services) {
   <display-name>$(Escape-Xml $s.Label)</display-name>
 </web-app>
 "@ | Set-Content "$ctxDir\web-display.xml" -Encoding UTF8
-    $altDD = ("$ctxDir\web-display.xml" -replace '\', '/')
+    $altDD = ("$ctxDir\web-display.xml" -replace '\\', '/')
     "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<!-- Generado desde $envFile -->`r`n<Context altDDName=`"$altDD`">`r`n$paramXml`r`n</Context>" |
         Set-Content "$ctxDir\ROOT.xml" -Encoding UTF8
     # Manager de Tomcat en cada servicio para poder detenerlo/iniciarlo (alta/baja en Eureka)
