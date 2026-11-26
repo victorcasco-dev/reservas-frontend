@@ -152,10 +152,12 @@ foreach ($s in $Services) {
     $altDD = ("$ctxDir\web-display.xml" -replace '\\', '/')
     "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<!-- Generado desde $envFile -->`r`n<Context altDDName=`"$altDD`">`r`n$paramXml`r`n</Context>" |
         Set-Content "$ctxDir\ROOT.xml" -Encoding UTF8
-    # Manager de Tomcat en cada servicio para poder detenerlo/iniciarlo (alta/baja en Eureka)
+    # Manager de Tomcat en cada servicio para poder detenerlo/iniciarlo (alta/baja en Eureka).
+    # Cookie de sesión propia: el navegador no separa cookies por puerto, y con el JSESSIONID común
+    # los 4 Managers en localhost se pisaban la sesión (y el token CSRF), dando 403 al hacer Stop.
     @"
 <?xml version="1.0" encoding="UTF-8"?>
-<Context docBase="`${catalina.home}/webapps/manager" privileged="true" antiResourceLocking="false">
+<Context docBase="`${catalina.home}/webapps/manager" privileged="true" sessionCookieName="MANAGER_$($s.Port)" antiResourceLocking="false">
   <Valve className="org.apache.catalina.valves.RemoteAddrValve" allow="127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1" />
 </Context>
 "@ | Set-Content "$ctxDir\manager.xml" -Encoding UTF8
