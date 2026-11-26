@@ -47,7 +47,9 @@ Write-Host "Redis (nodo 2): $RedisHost`:6379"
 Open-Console 'tomcat-microservicios' "$Tomcat\run" "& '$Tomcat\bin\catalina.bat' run 2>&1 | Tee-Object -FilePath '$Tomcat\logs\consola.log'"
 
 # El gateway escucha en todas las interfaces: el balanceador del nodo 2 le reenvía /api.
-Open-Console 'api-gateway' "$Root\api-gateway" "& '$Java' -jar '$gatewayJar'"
+# La consola también queda en api-gateway\gateway-consola.log: ahí se ve la traza [GW] de cada
+# petición enrutada (ruta, instancia del Tomcat de microservicios, estado y tiempo).
+Open-Console 'api-gateway' "$Root\api-gateway" "& '$Java' -jar '$gatewayJar' 2>&1 | Tee-Object -FilePath '$Root\api-gateway\gateway-consola.log'"
 
 Write-Host ''
 Write-Host 'Eureka:  http://localhost:8761' -ForegroundColor Green
