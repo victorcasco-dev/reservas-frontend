@@ -71,6 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: token.email,
       roles: token.roles,
     })
+    // El token no trae el nombre: se completa con /auth/me para mostrarlo en el menú.
+    fetchCurrentUser()
+      .then(setUser)
+      .catch(() => undefined)
   }, [])
 
   const logout = useCallback(() => {

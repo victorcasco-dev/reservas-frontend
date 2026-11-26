@@ -5,7 +5,8 @@ import { formatRoles } from '../../shared/roleLabels'
 import { UiNodeBadge } from '../../shared/ui/UiNodeBadge'
 
 export function AppLayout() {
-  const { user, logout, isAdministrator } = useAuth()
+  const { user, logout, isAdministrator, canManageAvailability } = useAuth()
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email
 
   return (
     <div className="app-shell">
@@ -26,10 +27,12 @@ export function AppLayout() {
             <ClipboardList size={18} strokeWidth={2} aria-hidden />
             Reservas
           </NavLink>
-          <NavLink to="/research-lines" className={({ isActive }) => (isActive ? 'active' : '')}>
-            <BookOpen size={18} strokeWidth={2} aria-hidden />
-            Líneas de investigación
-          </NavLink>
+          {canManageAvailability && (
+            <NavLink to="/research-lines" className={({ isActive }) => (isActive ? 'active' : '')}>
+              <BookOpen size={18} strokeWidth={2} aria-hidden />
+              Líneas de investigación
+            </NavLink>
+          )}
           {isAdministrator && (
             <>
               <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'active' : '')}>
@@ -49,8 +52,8 @@ export function AppLayout() {
         </nav>
         <div className="sidebar-foot">
           <UiNodeBadge />
-          <div className="user-chip">
-            <span className="user-chip-email">{user?.email}</span>
+          <div className="user-chip" title={user?.email}>
+            <span className="user-chip-email">{displayName}</span>
             <span className="user-chip-roles">
               {user ? formatRoles(user.roles) : ''}
             </span>

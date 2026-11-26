@@ -1,6 +1,6 @@
 import { newLocalId } from '../../shared/id'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { CircleX, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { CalendarCheck, CircleX, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { TimeSlotDto, TimeSlotStatus, UserDto } from '../../types/api'
 import { parseApiError } from '../../shared/api/client'
@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { Pagination } from '../../shared/ui/Pagination'
 import { SearchInput } from '../../shared/ui/SearchInput'
 import { useAuth } from '../auth/AuthContext'
+import { BookSlotDialog } from './BookSlotDialog'
 import { dateParts, durationMinutes, filterControl, filterLabel, longDate } from '../../shared/format'
 
 const PAGE_SIZE = 10
@@ -64,7 +65,9 @@ function slotLook(status: TimeSlotDto['status'], isPast: boolean) {
 }
 
 export function AvailabilityPage() {
-  const { canManageAvailability } = useAuth()
+  const { user, canManageAvailability } = useAuth()
+  /** El alumno reserva directamente desde esta pantalla. */
+  const canBook = (user?.roles.includes('STUDENT') ?? false) && !canManageAvailability
   const [slots, setSlots] = useState<TimeSlotDto[]>([])
   const [professors, setProfessors] = useState<UserDto[]>([])
   const [header, setHeader] = useState<HeaderForm>({
@@ -85,6 +88,7 @@ export function AvailabilityPage() {
   const [saving, setSaving] = useState(false)
   const [slotToCancel, setSlotToCancel] = useState<TimeSlotDto | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [slotToBook, setSlotToBook] = useState<TimeSlotDto | null>(null)
 
   const professorMap = useMemo(() => {
     const map = new Map<string, UserDto>()
@@ -228,7 +232,7 @@ export function AvailabilityPage() {
           <p className="page-lead">
             {canManageAvailability
               ? 'Elegí profesor y fecha, cargá una o más franjas horarias y publicá todo desde esta pantalla.'
-              : 'Consultá los turnos publicados por profesor y fecha. Para reservar, usá la pantalla de reservas cuando esté disponible.'}
+              : 'Elegí un turno disponible y reservalo desde acá mismo: indicás los motivos de consulta y te llega la confirmación por correo.'}
           </p>
         </div>
         <button type="button" className="btn btn-secondary" onClick={() => void loadSlots()}>
@@ -407,6 +411,17 @@ export function AvailabilityPage() {
                               <span className={`h-1.5 w-1.5 rounded-full ${look.dot}`} aria-hidden />
                               {look.label}
                             </span>
+                            {canBook && slot.status === 'AVAILABLE' && !isPast && (
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm shrink-0"
+                                aria-label={`Reservar turno de las ${slot.startTime.slice(0, 5)} del ${longDate(slot.slotDate)} con ${professorName}`}
+                                onClick={() => setSlotToBook(slot)}
+                              >
+                                <CalendarCheck size={14} aria-hidden />
+                                Reservar
+                              </button>
+                            )}
                             {canManageAvailability && (
                               <span className="w-8 shrink-0">
                                 {slot.status !== 'CANCELLED' && !isPast && (
@@ -536,6 +551,27 @@ export function AvailabilityPage() {
         </section>
         )}
       </div>
+
+      {canBook && user && (
+        <BookSlotDialog
+          slot={slotToBook}
+          professorName={
+            slotToBook
+              ? (slotToBook.professorName ??
+                  (() => {
+                    const p = professorMap.get(slotToBook.professorId)
+                    return p ? `${p.firstName} ${p.lastName}` : 'Profesor'
+                  })())
+              : ''
+          }
+          studentId={user.userId}
+          onClose={() => setSlotToBook(null)}
+          onBooked={() => {
+            setSlotToBook(null)
+            void loadSlots()
+          }}
+        />
+      )}
 
       {canManageAvailability && (
       <ConfirmDialog

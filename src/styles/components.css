@@ -689,6 +689,12 @@ textarea {
   box-shadow: var(--shadow);
 }
 
+.confirm-dialog--wide {
+  width: min(100%, 38rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
 .confirm-dialog-title {
   font-size: 1.2rem;
   margin-bottom: 0.5rem;

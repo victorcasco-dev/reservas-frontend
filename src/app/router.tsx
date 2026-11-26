@@ -11,6 +11,7 @@ import { ResearchLinesPage } from '../features/researchLines/ResearchLinesPage'
 import { NotFoundPage, ServerErrorPage } from '../features/errors/ErrorPage'
 import { ProtectedRoute } from './ProtectedRoute'
 import { AdminRoute } from './AdminRoute'
+import { ManagerRoute } from './ManagerRoute'
 
 export function AppRouter() {
   return (
@@ -23,7 +24,9 @@ export function AppRouter() {
           <Route index element={<Navigate to="/availability" replace />} />
           <Route path="availability" element={<AvailabilityPage />} />
           <Route path="reservations" element={<ReservationsPage />} />
-          <Route path="research-lines" element={<ResearchLinesPage />} />
+          <Route element={<ManagerRoute />}>
+            <Route path="research-lines" element={<ResearchLinesPage />} />
+          </Route>
           <Route element={<AdminRoute />}>
             <Route path="users" element={<UsersPage />} />
             <Route path="notifications" element={<NotificationsPage />} />

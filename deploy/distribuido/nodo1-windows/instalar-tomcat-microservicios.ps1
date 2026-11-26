@@ -143,13 +143,17 @@ foreach ($s in $Services) {
     # Nombre visible en el Manager ("Nombre a Mostrar"). El WAR de Spring Boot no trae web.xml y Tomcat
     # vaciaría el displayName del Context, así que se usa un descriptor alternativo (altDDName) que solo
     # declara <display-name>; metadata-complete="false" mantiene el arranque de Spring Boot.
+    # Va en conf\<servicio>\ y no en conf\<servicio>\localhost\: Tomcat trataría cualquier .xml de esa
+    # carpeta como otra aplicación (/web-display) e intentaría desplegarla.
+    $ddFile = Join-Path $Home_ "conf\$($s.Name)\web-display.xml"
+    Remove-Item "$ctxDir\web-display.xml" -ErrorAction SilentlyContinue
     @"
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.1" metadata-complete="false">
   <display-name>$(Escape-Xml $s.Label)</display-name>
 </web-app>
-"@ | Set-Content "$ctxDir\web-display.xml" -Encoding UTF8
-    $altDD = ("$ctxDir\web-display.xml" -replace '\\', '/')
+"@ | Set-Content $ddFile -Encoding UTF8
+    $altDD = ($ddFile -replace '\\', '/')
     "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<!-- Generado desde $envFile -->`r`n<Context altDDName=`"$altDD`">`r`n$paramXml`r`n</Context>" |
         Set-Content "$ctxDir\ROOT.xml" -Encoding UTF8
     # Manager de Tomcat en cada servicio para poder detenerlo/iniciarlo (alta/baja en Eureka).

@@ -99,6 +99,8 @@ export interface CurrentUserResponse {
   userId: string
   email: string
   roles: string[]
+  firstName?: string
+  lastName?: string
 }
 
 export interface ApiError {
